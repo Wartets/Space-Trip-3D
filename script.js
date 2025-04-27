@@ -1,5 +1,5 @@
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x000000, 0.002);
+scene.fog = new THREE.FogExp2(0x000000, 0.001);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
 
@@ -10,11 +10,11 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 // === Constantes de configuration ===
-const ASTEROID_SPAWN_DISTANCE = 700;			// Demi-largeur de la zone d'apparition
-const ASTEROID_REMOVE_DISTANCE = 800;			// Distance au-delà de laquelle l'astéroïde est supprimé
-const ASTEROID_RESPAWN_DISTANCE = 200;			// Distance de la zone de réapparition
-const ASTEROID_FOG_DISTANCE = 400;				// Distance au-delà de laquelle les astéroïdes sont assombris
-const ASTEROID_COLLISION_DISTANCE = 700;		// Distance minimale pour le calcul de collisions d'astéroïdes
+const ASTEROID_SPAWN_DISTANCE = 1000;			// Demi-largeur de la zone d'apparition
+const ASTEROID_REMOVE_DISTANCE = 1100;			// Distance au-delà de laquelle l'astéroïde est supprimé
+const ASTEROID_RESPAWN_DISTANCE = 300;			// Distance de la zone de réapparition
+// const ASTEROID_FOG_DISTANCE = 400;			// Distance au-delà de laquelle les astéroïdes sont assombris
+const ASTEROID_COLLISION_DISTANCE = 500;		// Distance minimale pour le calcul de collisions d'astéroïdes
 const ASTEROID_MIN_SIZE = 10;					// Taille minimale des astéroïdes
 const ASTEROID_MAX_SIZE = 60;					// Taille maximale des astéroïdes
 const ASTEROID_COUNT = 1200;					// Nombre d'astéroïdes en même temps
@@ -25,7 +25,7 @@ const SHIP_SPEED = 5;							// Vitesse du vaisseau
 const SHIP_ROTATION_SENSITIVITY = 0.002;		// Sensibilité de la rotation du vaisseau
 const CAMERA_OFFSET_Z = 5;						// Distance de la caméra par rapport au vaisseau
 const CAMERA_LOOK_AT_OFFSET = 0.8;				// Distance de décalage pour l'orientation de la caméra
-const starCount = 8500;							// Nombre d'étoiles
+const starCount = 4000;							// Nombre d'étoiles
 const STAR_FIELD_SIZE = 2000;					// Taille du cube dans lequel les étoiles sont générées
 const STAR_REMOVE_DISTANCE = 1000;				// Distance au-delà de laquelle une étoile est supprimée
 const MISSILE_REMOVE_DISTANCE = 800;			// Distance au-delà de laquelle le missile est supprimé
@@ -111,7 +111,7 @@ function createAsteroid() {
 
 	const mat = new THREE.MeshStandardMaterial({
 		color: Math.random() * ASTEROID_COLOR_VARIATION,
-		// wireframe: Math.random() < 0.5,
+		wireframe: Math.random() < 0.05,
 		transparent: Math.random() > 0.5,
 		opacity: Math.random() > 0.5,
 		roughness: Math.random() > 0.2,
@@ -232,9 +232,8 @@ function loseLife() {
 	}
 }
 
-function startInvulnerability() {
+function startInvulnerability(duration = invulnerabilityDuration) {
 	isInvulnerable = true;
-	invulnerabilityStartTime = performance.now();
 	shipGroup.traverse((child) => {
 		if (child.isMesh) {
 			child.material.transparent = true;
@@ -249,16 +248,17 @@ function startInvulnerability() {
 				child.material.transparent = false;
 			}
 		});
-	}, invulnerabilityDuration);
+	}, duration);
 }
 
 function updateLivesDisplay() {
 	const hearts = document.querySelectorAll('#lives .heart');
-	for (let i = 0; i < hearts.length; i++) {
+	const totalHearts = hearts.length;
+	for (let i = 0; i < totalHearts; i++) {
 		if (i < lives) {
-			hearts[i].style.visibility = 'visible';
+			hearts[totalHearts - 1 - i].style.visibility = 'visible';
 		} else {
-			hearts[i].style.visibility = 'hidden';
+			hearts[totalHearts - 1 - i].style.visibility = 'hidden';
 		}
 	}
 }
@@ -304,6 +304,16 @@ function detectCollisions() {
 		const asteroidBox = new THREE.Box3().setFromObject(asteroid);
 		if (shipBox.intersectsBox(asteroidBox)) {
 			loseLife();
+			break;
+		}
+	}
+	
+	for (let missile of enemyMissiles) {
+		const missileBox = new THREE.Box3().setFromObject(missile);
+		if (shipBox.intersectsBox(missileBox)) {
+			loseLife();
+			scene.remove(missile);
+			enemyMissiles.splice(enemyMissiles.indexOf(missile), 1);
 			break;
 		}
 	}
@@ -617,7 +627,7 @@ function animate() {
 		moveMissiles();
 		detectMissileAsteroidCollisions();
 		handleFiring();
-		detectCollisions();
+		// detectCollisions();
 		detectAsteroidCollisions();
 		pulse();
 	}
@@ -625,6 +635,7 @@ function animate() {
 	renderer.render(scene, camera);
 }
 
+startInvulnerability(5000); // 5 secondes
 animate();
 
 // === Adaptation de la taille du rendu lors du redimensionnement de la fenêtre ===
