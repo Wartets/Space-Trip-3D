@@ -33,7 +33,9 @@ const MISSILE_SPEED = 10;						// Vitesse du missile
 const MISSILE_RADIUS = 0.5;						// Rayon des missiles
 let missileCooldown = 490; 						// Temps entre les tirs en ms
 let MISSILE_NUMBER = 20;						// Nombre de missile avant rechargement
-let reloadTime = 4000; 							// Temps de rechargement après MISSILE_NUMBER tirs
+let reloadTime = 4000; 							// Temps de rechargement après MISSILE_NUMBER tirs en ms
+let lives = 5;									// Nombre de vies
+const invulnerabilityDuration = 2000;			// Temps d'invincibilité après un choc en ms
 
 // === Création du vaisseau ===
 const shipVelocity = new THREE.Vector3();
@@ -209,7 +211,6 @@ function moveShip() {
 	shipGroup.position.add(shipVelocity.clone().multiplyScalar(SHIP_SPEED));
 }
 
-
 // === Déplacement des astéroïdes ===
 function moveAsteroids() {
 	for (let asteroid of asteroids) {
@@ -218,9 +219,8 @@ function moveAsteroids() {
 }
 
 // === Gestion des vies ===
-let lives = 3;
 let isInvulnerable = false;
-const invulnerabilityDuration = 2000; // 2 secondes d'invincibilité après un choc
+let invulnerabilityStartTime = 0;
 
 function loseLife() {
 	lives--;
@@ -234,6 +234,7 @@ function loseLife() {
 
 function startInvulnerability() {
 	isInvulnerable = true;
+	invulnerabilityStartTime = performance.now();
 	shipGroup.traverse((child) => {
 		if (child.isMesh) {
 			child.material.transparent = true;
@@ -262,6 +263,37 @@ function updateLivesDisplay() {
 	}
 }
 
+function pulse() {
+	if (isInvulnerable) {
+		const elapsed = (performance.now() - invulnerabilityStartTime) / 1000;
+		const pulse = 0.5 + 0.5 * Math.sin(elapsed * 10);
+
+		shipGroup.traverse((child) => {
+			if (child.isMesh) {
+				child.material.transparent = true;
+				child.material.opacity = pulse;
+			}
+		});
+
+		const hearts = document.querySelectorAll('#lives .heart');
+		hearts.forEach(heart => {
+			heart.style.opacity = pulse;
+		});
+	} else {
+		shipGroup.traverse((child) => {
+			if (child.isMesh) {
+				child.material.opacity = 1;
+				child.material.transparent = false;
+			}
+		});
+
+		const hearts = document.querySelectorAll('#lives .heart');
+		hearts.forEach(heart => {
+			heart.style.opacity = 1;
+		});
+	}
+}
+
 // === Détection de collisions ===
 function detectCollisions() {
 	if (isInvulnerable) return;
@@ -276,7 +308,6 @@ function detectCollisions() {
 		}
 	}
 }
-
 
 function detectAsteroidCollisions() {
 	for (let i = 0; i < asteroids.length; i++) {
@@ -588,6 +619,7 @@ function animate() {
 		handleFiring();
 		detectCollisions();
 		detectAsteroidCollisions();
+		pulse();
 	}
 	updateCamera();
 	renderer.render(scene, camera);
