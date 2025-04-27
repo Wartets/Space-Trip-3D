@@ -16,20 +16,21 @@ const ASTEROID_RESPAWN_DISTANCE = 200;			// Distance de la zone de réapparition
 const ASTEROID_FOG_DISTANCE = 400;				// Distance au-delà de laquelle les astéroïdes sont assombris
 const ASTEROID_COLLISION_DISTANCE = 700;		// Distance minimale pour le calcul de collisions d'astéroïdes
 const ASTEROID_MIN_SIZE = 10;					// Taille minimale des astéroïdes
-const ASTEROID_MAX_SIZE = 50;					// Taille maximale des astéroïdes
-const ASTEROID_COUNT = 1000;					// Nombre d'astéroïdes en même temps
-const ASTEROID_VELOCITY_MIN = 0.01;				// Vitesse minimale des astéroïdes
-const ASTEROID_VELOCITY_MAX = 1;				// Vitesse maximale des astéroïdes
+const ASTEROID_MAX_SIZE = 60;					// Taille maximale des astéroïdes
+const ASTEROID_COUNT = 1200;					// Nombre d'astéroïdes en même temps
+const ASTEROID_VELOCITY_MIN = 0.1;				// Vitesse minimale des astéroïdes
+const ASTEROID_VELOCITY_MAX = 5;				// Vitesse maximale des astéroïdes
 const ASTEROID_COLOR_VARIATION = 0x404040;		// Plage de couleurs des astéroïdes
 const SHIP_SPEED = 5;							// Vitesse du vaisseau
 const SHIP_ROTATION_SENSITIVITY = 0.002;		// Sensibilité de la rotation du vaisseau
 const CAMERA_OFFSET_Z = 5;						// Distance de la caméra par rapport au vaisseau
-const CAMERA_LOOK_AT_OFFSET = 0.25;				// Distance de décalage pour l'orientation de la caméra
-const starCount = 8000;							// Nombre d'étoiles
+const CAMERA_LOOK_AT_OFFSET = 0.8;				// Distance de décalage pour l'orientation de la caméra
+const starCount = 8500;							// Nombre d'étoiles
 const STAR_FIELD_SIZE = 2000;					// Taille du cube dans lequel les étoiles sont générées
 const STAR_REMOVE_DISTANCE = 1000;				// Distance au-delà de laquelle une étoile est supprimée
 const MISSILE_REMOVE_DISTANCE = 800;			// Distance au-delà de laquelle le missile est supprimé
 const MISSILE_SPEED = 10;						// Vitesse du missile
+const MISSILE_RADIUS = 0.5;						// Rayon des missiles
 let missileCooldown = 490; 						// Temps entre les tirs en ms
 let MISSILE_NUMBER = 20;						// Nombre de missile avant rechargement
 let reloadTime = 4000; 							// Temps de rechargement après MISSILE_NUMBER tirs
@@ -41,19 +42,19 @@ const FRICTION = 0.9;							// Taux de "freinage" par frame (0.95 = ralentit dou
 
 const shipGroup = new THREE.Group();
 const shipParts = [
-    new THREE.BoxGeometry(0.2, 0.5, 0.2),		// Vertical body part
-    new THREE.BoxGeometry(0.3, 0.2, 0.6),		// Horizontal body part
-    new THREE.BoxGeometry(0.2, 0.2, 0.2),		// Smaller part for the front
-    new THREE.BoxGeometry(0.1, 0.1, 0.4),		// Small tail part
-    new THREE.BoxGeometry(0.4, 0.2, 0.1),		// Wing-like extension
+	new THREE.BoxGeometry(0.2, 0.5, 0.2),		// Vertical body part
+	new THREE.BoxGeometry(0.3, 0.2, 0.6),		// Horizontal body part
+	new THREE.BoxGeometry(0.2, 0.2, 0.2),		// Smaller part for the front
+	new THREE.BoxGeometry(0.1, 0.1, 0.4),		// Small tail part
+	new THREE.BoxGeometry(0.4, 0.2, 0.1),		// Wing-like extension
 ];
 
 const shipMaterialPart = new THREE.MeshStandardMaterial({ color: 0xe81730, roughness: 0.5, metalness: 0.1 });
 const parts = shipParts.map((geometry, index) => {
-    const part = new THREE.Mesh(geometry, shipMaterialPart);
-    part.castShadow = true;
-    part.receiveShadow = true;
-    return part;
+	const part = new THREE.Mesh(geometry, shipMaterialPart);
+	part.castShadow = true;
+	part.receiveShadow = true;
+	return part;
 });
 
 parts[0].position.set(0, 0, 0);					// Center of the body
@@ -140,7 +141,7 @@ function createAsteroid() {
 		(Math.random() - 0.5) * (ASTEROID_VELOCITY_MAX - ASTEROID_VELOCITY_MIN) + ASTEROID_VELOCITY_MIN,
 		(Math.random() - 0.5) * (ASTEROID_VELOCITY_MAX - ASTEROID_VELOCITY_MIN) + ASTEROID_VELOCITY_MIN
 	);
-    
+	
 	asteroid.userData.radius = size;
 	scene.add(asteroid);
 	asteroids.push(asteroid);
@@ -168,6 +169,12 @@ document.body.addEventListener('click', () => {
 
 document.addEventListener('pointerlockchange', () => {
 	isPointerLocked = document.pointerLockElement === document.body;
+	const overlay = document.getElementById('overlay');
+	if (isPointerLocked) {
+		overlay.classList.add('hidden');
+	} else {
+		overlay.classList.remove('hidden');
+	}
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -179,27 +186,27 @@ document.addEventListener('mousemove', (e) => {
 });
 
 function moveShip() {
-    shipGroup.rotation.order = "YXZ";
-    shipGroup.rotation.y = yaw;
-    shipGroup.rotation.x = pitch;
+	shipGroup.rotation.order = "YXZ";
+	shipGroup.rotation.y = yaw;
+	shipGroup.rotation.x = pitch;
 
-    const inputDirection = new THREE.Vector3();
+	const inputDirection = new THREE.Vector3();
 
-    if (keys['z']) inputDirection.z -= 1;
-    if (keys['s']) inputDirection.z += 1;
-    if (keys['q']) inputDirection.x -= 1;
-    if (keys['d']) inputDirection.x += 1;
-    if (keys[' ']) inputDirection.y += 1;
-    if (keys['shift']) inputDirection.y -= 1;
+	if (keys['z']) inputDirection.z -= 1;
+	if (keys['s']) inputDirection.z += 1;
+	if (keys['q']) inputDirection.x -= 1;
+	if (keys['d']) inputDirection.x += 1;
+	if (keys[' ']) inputDirection.y += 1;
+	if (keys['shift']) inputDirection.y -= 1;
 
-    inputDirection.normalize();
-    inputDirection.applyEuler(shipGroup.rotation);
+	inputDirection.normalize();
+	inputDirection.applyEuler(shipGroup.rotation);
 
-    shipVelocity.add(inputDirection.multiplyScalar(ACCELERATION));
+	shipVelocity.add(inputDirection.multiplyScalar(ACCELERATION));
 
-    shipVelocity.multiplyScalar(FRICTION);
+	shipVelocity.multiplyScalar(FRICTION);
 
-    shipGroup.position.add(shipVelocity.clone().multiplyScalar(SHIP_SPEED));
+	shipGroup.position.add(shipVelocity.clone().multiplyScalar(SHIP_SPEED));
 }
 
 
@@ -210,18 +217,66 @@ function moveAsteroids() {
 	}
 }
 
+// === Gestion des vies ===
+let lives = 3;
+let isInvulnerable = false;
+const invulnerabilityDuration = 2000; // 2 secondes d'invincibilité après un choc
+
+function loseLife() {
+	lives--;
+	updateLivesDisplay();
+	if (lives <= 0) {
+		gameOver();
+	} else {
+		startInvulnerability();
+	}
+}
+
+function startInvulnerability() {
+	isInvulnerable = true;
+	shipGroup.traverse((child) => {
+		if (child.isMesh) {
+			child.material.transparent = true;
+			child.material.opacity = 0.5;
+		}
+	});
+	setTimeout(() => {
+		isInvulnerable = false;
+		shipGroup.traverse((child) => {
+			if (child.isMesh) {
+				child.material.opacity = 1;
+				child.material.transparent = false;
+			}
+		});
+	}, invulnerabilityDuration);
+}
+
+function updateLivesDisplay() {
+	const hearts = document.querySelectorAll('#lives .heart');
+	for (let i = 0; i < hearts.length; i++) {
+		if (i < lives) {
+			hearts[i].style.visibility = 'visible';
+		} else {
+			hearts[i].style.visibility = 'hidden';
+		}
+	}
+}
+
 // === Détection de collisions ===
 function detectCollisions() {
+	if (isInvulnerable) return;
+
 	const shipBox = new THREE.Box3().setFromObject(shipGroup);
 
 	for (let asteroid of asteroids) {
 		const asteroidBox = new THREE.Box3().setFromObject(asteroid);
 		if (shipBox.intersectsBox(asteroidBox)) {
-			alert('Crash!');
-			window.location.reload();
+			loseLife();
+			break;
 		}
 	}
 }
+
 
 function detectAsteroidCollisions() {
 	for (let i = 0; i < asteroids.length; i++) {
@@ -274,66 +329,130 @@ let lastMissileTime = 0;
 let missilesFiredInBurst = 0;
 
 function fireMissile() {
-    const missileGeometry = new THREE.SphereGeometry(0.5, 8, 8);
-    const missileMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-    const missile = new THREE.Mesh(missileGeometry, missileMaterial);
+	const missileGeometry = new THREE.SphereGeometry(MISSILE_RADIUS, 8, 8);
+	const missileMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+	const missile = new THREE.Mesh(missileGeometry, missileMaterial);
 
-    missile.position.copy(shipGroup.position);
-    missile.quaternion.copy(shipGroup.quaternion);
+	const forwardDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(shipGroup.quaternion).normalize();
 
-    const forwardDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(missile.quaternion).normalize();
+	const missileStartOffset = 2;
+	const startPosition = shipGroup.position.clone().add(forwardDirection.clone().multiplyScalar(missileStartOffset));
 
-    const initialMissileVelocity = forwardDirection.multiplyScalar(MISSILE_SPEED);
+	missile.position.copy(startPosition);
+	missile.quaternion.copy(shipGroup.quaternion);
 
-    missile.userData = {
-        velocity: initialMissileVelocity.add(shipVelocity.clone())
-    };
+	const missileSpeed = 10;
 
-    scene.add(missile);
-    missiles.push(missile);
+	const shipVelocityAtFireTime = shipVelocity.clone();
+
+	const initialMissileVelocity = forwardDirection.multiplyScalar(missileSpeed).add(shipVelocityAtFireTime);
+
+	missile.userData = {
+		velocity: initialMissileVelocity
+	};
+
+	scene.add(missile);
+	missiles.push(missile);
 }
 
-function moveMissiles() {
-    for (let i = missiles.length - 1; i >= 0; i--) {
-        const missile = missiles[i];
-        missile.position.add(missile.userData.velocity.clone());
 
-        if (missile.position.distanceTo(shipGroup.position) > MISSILE_REMOVE_DISTANCE) {
-            scene.remove(missile);
-            missiles.splice(i, 1);
-        }
-    }
+function moveMissiles() {
+	for (let i = missiles.length - 1; i >= 0; i--) {
+		const missile = missiles[i];
+		missile.position.add(missile.userData.velocity.clone());
+
+		if (missile.position.distanceTo(shipGroup.position) > MISSILE_REMOVE_DISTANCE) {
+			scene.remove(missile);
+			missiles.splice(i, 1);
+		}
+	}
 }
 
 function handleFiring() {
-    const now = Date.now();
+	const now = Date.now();
 
-    if (isFiring) {
-        const currentCooldown = (missilesFiredInBurst > 0 && missilesFiredInBurst % MISSILE_NUMBER === 0) ? reloadTime : missileCooldown;
+	if (isFiring) {
+		const currentCooldown = (missilesFiredInBurst > 0 && missilesFiredInBurst % MISSILE_NUMBER === 0) ? reloadTime : missileCooldown;
 
-        if (now - lastMissileTime >= currentCooldown) {
-            fireMissile();
-            lastMissileTime = now;
-            missilesFiredInBurst++;
+		if (now - lastMissileTime >= currentCooldown) {
+			fireMissile();
+			lastMissileTime = now;
+			missilesFiredInBurst++;
 
-            if (missilesFiredInBurst > MISSILE_NUMBER) {
-                missilesFiredInBurst = 1;
-            }
-        }
-    }
+			if (missilesFiredInBurst > MISSILE_NUMBER) {
+				missilesFiredInBurst = 1;
+			}
+		}
+	}
 }
 
 window.addEventListener('mousedown', (e) => {
-    if (isPointerLocked && e.button === 0) {
-        isFiring = true;
-    }
+	if (isPointerLocked && e.button === 0) {
+		isFiring = true;
+	}
 });
 
 window.addEventListener('mouseup', (e) => {
-    if (e.button === 0) {
-        isFiring = false;
-    }
+	if (e.button === 0) {
+		isFiring = false;
+	}
 });
+
+function detectMissileAsteroidCollisions() {
+	for (let i = missiles.length - 1; i >= 0; i--) {
+		const missile = missiles[i];
+
+		for (let j = asteroids.length - 1; j >= 0; j--) {
+			const asteroid = asteroids[j];
+
+			const distance = missile.position.distanceTo(asteroid.position);
+			const collisionDistance = (asteroid.userData.radius || ASTEROID_MIN_SIZE) + MISSILE_RADIUS;
+
+			if (distance < collisionDistance) {
+				scene.remove(missile);
+				missiles.splice(i, 1);
+
+				scene.remove(asteroid);
+				asteroids.splice(j, 1);
+
+				if (asteroid.userData.radius > ASTEROID_MIN_SIZE / 16) {
+					const newRadius = asteroid.userData.radius * 0.5;
+
+					for (let k = 0; k < 2; k++) {
+						const newGeo = new THREE.SphereGeometry(newRadius, 6, 6);
+						const newMat = new THREE.MeshStandardMaterial({
+							color: (Math.random() < 0.5) * ASTEROID_COLOR_VARIATION,
+							transparent: Math.random() > 0.5,
+							opacity: Math.random() > 0.5,
+							roughness: Math.random() > 0.2,
+							metalness: Math.random() > 0.5
+						});
+						const newAsteroid = new THREE.Mesh(newGeo, newMat);
+						newAsteroid.castShadow = true;
+						newAsteroid.receiveShadow = true;
+
+						newAsteroid.position.copy(asteroid.position);
+
+						const direction = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+						const splitSpeed = asteroid.userData.velocity.length() * 1.4;
+
+						if (k === 0) {
+							newAsteroid.userData.velocity = direction.clone().multiplyScalar(splitSpeed);
+						} else {
+							newAsteroid.userData.velocity = direction.clone().negate().multiplyScalar(splitSpeed);
+						}
+
+						newAsteroid.userData.radius = newRadius;
+						scene.add(newAsteroid);
+						asteroids.push(newAsteroid);
+					}
+				}
+
+				break;
+			}
+		}
+	}
+}
 
 // === Etoile de fond animée ===
 const starGeometry = new THREE.BufferGeometry();
@@ -426,24 +545,48 @@ function updateSunPosition() {
 
 // === Mise à jour de la caméra ===
 function updateCamera() {
-    const offset = new THREE.Vector3(0, 0, CAMERA_OFFSET_Z);
-    offset.applyEuler(shipGroup.rotation);
-    camera.position.copy(shipGroup.position.clone().add(offset));
-    camera.lookAt(shipGroup.position.clone().add(new THREE.Vector3(0, 0, CAMERA_LOOK_AT_OFFSET)));
+	const offset = new THREE.Vector3(0, 0, CAMERA_OFFSET_Z);
+	offset.applyEuler(shipGroup.rotation);
+	camera.position.copy(shipGroup.position.clone().add(offset));
+	camera.lookAt(shipGroup.position.clone().add(new THREE.Vector3(0, 0, CAMERA_LOOK_AT_OFFSET)));
 }
+
+// === Game Over ===
+let isGameOver = false;
+
+function gameOver() {
+    isGameOver = true;
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    gameOverScreen.classList.remove('hidden');
+
+    // Sortir du mode pointer lock
+    if (document.pointerLockElement) {
+        document.exitPointerLock();
+    }
+}
+
+const restartButton = document.getElementById('restartButton');
+restartButton.addEventListener('click', () => {
+    window.location.reload();
+});
 
 // === Boucle d'animation ===
 function animate() {
+	const loader = document.getElementById('loader');
+	if (loader) {
+		loader.style.display = 'none';
+	}
 	moveStars();
 	requestAnimationFrame(animate);
 	manageAsteroids();
 	updateSunPosition();
-	if (isPointerLocked) { // pour forcer l'utilisateur a cliquer une fois sur l'écran pour démarrer
+	if (isPointerLocked && !isGameOver) { // pour forcer l'utilisateur a cliquer une fois sur l'écran pour démarrer
 		moveShip();
 		moveAsteroids();
 		moveMissiles();
+		detectMissileAsteroidCollisions();
 		handleFiring();
-		// detectCollisions();
+		detectCollisions();
 		detectAsteroidCollisions();
 	}
 	updateCamera();
