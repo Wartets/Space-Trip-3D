@@ -1,5 +1,5 @@
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x000000, 0.0025);
+scene.fog = new THREE.FogExp2(0x000000, 0.002);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
 
@@ -10,32 +10,67 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 // === Constantes de configuration ===
-const ASTEROID_SPAWN_DISTANCE = 800;			// Demi-largeur de la zone d'apparition
-const ASTEROID_REMOVE_DISTANCE = 900;			// Distance au-delà de laquelle l'astéroïde est supprimé
-const ASTEROID_RESPAWN_DISTANCE = 300;			// Distance de la zone de réapparition
+const ASTEROID_SPAWN_DISTANCE = 700;			// Demi-largeur de la zone d'apparition
+const ASTEROID_REMOVE_DISTANCE = 800;			// Distance au-delà de laquelle l'astéroïde est supprimé
+const ASTEROID_RESPAWN_DISTANCE = 200;			// Distance de la zone de réapparition
 const ASTEROID_FOG_DISTANCE = 400;				// Distance au-delà de laquelle les astéroïdes sont assombris
+const ASTEROID_COLLISION_DISTANCE = 700;		// Distance minimale pour le calcul de collisions d'astéroïdes
 const ASTEROID_MIN_SIZE = 10;					// Taille minimale des astéroïdes
-const ASTEROID_MAX_SIZE = 60;					// Taille maximale des astéroïdes
-const ASTEROID_COUNT = 800;						// Nombre d'astéroïdes en même temps
-const ASTEROID_VELOCITY_MIN = 0.05;				// Vitesse minimale des astéroïdes
-const ASTEROID_VELOCITY_MAX = 0.5;				// Vitesse maximale des astéroïdes
-const ASTEROID_COLOR_VARIATION = 0xffffff;		// Plage de couleurs des astéroïdes
-const SHIP_SPEED = .5;							// Vitesse du vaisseau
+const ASTEROID_MAX_SIZE = 50;					// Taille maximale des astéroïdes
+const ASTEROID_COUNT = 1000;					// Nombre d'astéroïdes en même temps
+const ASTEROID_VELOCITY_MIN = 0.01;				// Vitesse minimale des astéroïdes
+const ASTEROID_VELOCITY_MAX = 1;				// Vitesse maximale des astéroïdes
+const ASTEROID_COLOR_VARIATION = 0x404040;		// Plage de couleurs des astéroïdes
+const SHIP_SPEED = 5;							// Vitesse du vaisseau
 const SHIP_ROTATION_SENSITIVITY = 0.002;		// Sensibilité de la rotation du vaisseau
 const CAMERA_OFFSET_Z = 5;						// Distance de la caméra par rapport au vaisseau
-const CAMERA_LOOK_AT_OFFSET = 0.5;				// Distance de décalage pour l'orientation de la caméra
-const SHIP_SIZE = new THREE.Vector3(.7, .7, .01);	// Dimensions du vaisseau
-const starCount = 10000;						// Nombre d'étoiles
+const CAMERA_LOOK_AT_OFFSET = 0.25;				// Distance de décalage pour l'orientation de la caméra
+const starCount = 8000;							// Nombre d'étoiles
 const STAR_FIELD_SIZE = 2000;					// Taille du cube dans lequel les étoiles sont générées
 const STAR_REMOVE_DISTANCE = 1000;				// Distance au-delà de laquelle une étoile est supprimée
+const MISSILE_REMOVE_DISTANCE = 800;			// Distance au-delà de laquelle le missile est supprimé
+const MISSILE_SPEED = 10;						// Vitesse du missile
+let missileCooldown = 490; 						// Temps entre les tirs en ms
+let MISSILE_NUMBER = 20;						// Nombre de missile avant rechargement
+let reloadTime = 4000; 							// Temps de rechargement après MISSILE_NUMBER tirs
 
-// === Création du vaisseau (cube) ===
-const shipGeometry = new THREE.BoxGeometry(SHIP_SIZE.x, SHIP_SIZE.y, SHIP_SIZE.z);
-const shipMaterial = new THREE.MeshStandardMaterial({ color: 0x14b814, roughness: 0.5, metalness: 0.1 });
-const ship = new THREE.Mesh(shipGeometry, shipMaterial);
-scene.add(ship);
-ship.castShadow = true;
-ship.receiveShadow = true;
+// === Création du vaisseau ===
+const shipVelocity = new THREE.Vector3();
+const ACCELERATION = 0.4;						// Force d'accélération
+const FRICTION = 0.9;							// Taux de "freinage" par frame (0.95 = ralentit doucement)
+
+const shipGroup = new THREE.Group();
+const shipParts = [
+    new THREE.BoxGeometry(0.2, 0.5, 0.2),		// Vertical body part
+    new THREE.BoxGeometry(0.3, 0.2, 0.6),		// Horizontal body part
+    new THREE.BoxGeometry(0.2, 0.2, 0.2),		// Smaller part for the front
+    new THREE.BoxGeometry(0.1, 0.1, 0.4),		// Small tail part
+    new THREE.BoxGeometry(0.4, 0.2, 0.1),		// Wing-like extension
+];
+
+const shipMaterialPart = new THREE.MeshStandardMaterial({ color: 0xe81730, roughness: 0.5, metalness: 0.1 });
+const parts = shipParts.map((geometry, index) => {
+    const part = new THREE.Mesh(geometry, shipMaterialPart);
+    part.castShadow = true;
+    part.receiveShadow = true;
+    return part;
+});
+
+parts[0].position.set(0, 0, 0);					// Center of the body
+parts[1].position.set(-0.2, 0.3, 0);			// Horizontal body part
+parts[2].position.set(0, 0.7, 0);				// Front small part
+parts[3].position.set(0, -0.3, 0);				// Small tail part
+parts[4].position.set(0.5, 0.5, 0);				// Wing-like extension
+
+parts.forEach(part => shipGroup.add(part));
+
+scene.add(shipGroup);
+
+// === Lumière du vaisseau ===
+const shipLight = new THREE.PointLight(0xf38b97, 100, 1000);
+shipLight.castShadow = true; 
+shipLight.receiveShadow = true;
+shipGroup.add(shipLight); 
 
 // === Initialisation de la caméra ===
 camera.position.z = 0;
@@ -43,7 +78,23 @@ camera.position.y = 0;
 
 const asteroids = [];
 	
-// === Fonction pour créer un astéroïde ===
+// === Créer les astéroïdes ===
+function isPositionFree(x, y, z, size) {
+	for (let asteroid of asteroids) {
+		const dx = asteroid.position.x - x;
+		const dy = asteroid.position.y - y;
+		const dz = asteroid.position.z - z;
+		const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+		const minDistance = (asteroid.geometry.boundingSphere?.radius || ASTEROID_MIN_SIZE) + size;
+
+		if (distance < minDistance * 1.2) {
+			return false;
+		}
+	}
+	return true;
+}
+
 function createAsteroid() {
 	let geo;
 	const size = Math.random() * (ASTEROID_MAX_SIZE - ASTEROID_MIN_SIZE) + ASTEROID_MIN_SIZE;
@@ -55,38 +106,42 @@ function createAsteroid() {
 	else if (type === 1) geo = new THREE.BoxGeometry(size, size, size);
 	else geo = new THREE.SphereGeometry(size, 6, 6);
 
-	const mat = new THREE.MeshBasicMaterial({
+	const mat = new THREE.MeshStandardMaterial({
 		color: Math.random() * ASTEROID_COLOR_VARIATION,
-		wireframe: Math.random() < 0.5,
-		transparent: Math.random() < 0.5,
-		opacity: Math.random() * 0.5 + 0.5,
-		/* emissive: new THREE.Color(Math.random(), Math.random(), Math.random()),
-		emissiveIntensity: Math.random() * 0.5 + 0.5,
-		roughness: 0.8,
-		metalness: 0.2 */
+		// wireframe: Math.random() < 0.5,
+		transparent: Math.random() > 0.5,
+		opacity: Math.random() > 0.5,
+		roughness: Math.random() > 0.2,
+		metalness: Math.random() > 0.5
 	});
 
 	const asteroid = new THREE.Mesh(geo, mat);
-	asteroid.castShadow = true;
 	asteroid.receiveShadow = true;
+	asteroid.castShadow = false;
 
 	let x, y, z;
 	let distanceToShip;
+	let tries = 0;
 	do {
-		x = ship.position.x + (Math.random() - 0.5) * ASTEROID_SPAWN_DISTANCE * 2;
-		y = ship.position.y + (Math.random() - 0.5) * ASTEROID_SPAWN_DISTANCE * 2;
-		z = ship.position.z + (Math.random() - 0.5) * ASTEROID_SPAWN_DISTANCE * 2;
-		distanceToShip = Math.sqrt(Math.pow(x - ship.position.x, 2) + Math.pow(y - ship.position.y, 2) + Math.pow(z - ship.position.z, 2));
-	} while (distanceToShip < minDistance);
+		x = shipGroup.position.x + (Math.random() - 0.5) * ASTEROID_SPAWN_DISTANCE * 2;
+		y = shipGroup.position.y + (Math.random() - 0.5) * ASTEROID_SPAWN_DISTANCE * 2;
+		z = shipGroup.position.z + (Math.random() - 0.5) * ASTEROID_SPAWN_DISTANCE * 2;
+		distanceToShip = Math.sqrt(Math.pow(x - shipGroup.position.x, 2) + Math.pow(y - shipGroup.position.y, 2) + Math.pow(z - shipGroup.position.z, 2));
+		tries++;
+		// On évite de bloquer si la place est trop encombrée
+		if (tries > 50) break; 
+	} while (distanceToShip < minDistance || !isPositionFree(x, y, z, size));
 
 	asteroid.position.set(x, y, z);
+	
 
 	asteroid.userData.velocity = new THREE.Vector3(
 		(Math.random() - 0.5) * (ASTEROID_VELOCITY_MAX - ASTEROID_VELOCITY_MIN) + ASTEROID_VELOCITY_MIN,
 		(Math.random() - 0.5) * (ASTEROID_VELOCITY_MAX - ASTEROID_VELOCITY_MIN) + ASTEROID_VELOCITY_MIN,
 		(Math.random() - 0.5) * (ASTEROID_VELOCITY_MAX - ASTEROID_VELOCITY_MIN) + ASTEROID_VELOCITY_MIN
 	);
-
+    
+	asteroid.userData.radius = size;
 	scene.add(asteroid);
 	asteroids.push(asteroid);
 }
@@ -124,24 +179,29 @@ document.addEventListener('mousemove', (e) => {
 });
 
 function moveShip() {
-	ship.rotation.order = "YXZ";
-	ship.rotation.y = yaw;
-	ship.rotation.x = pitch;
+    shipGroup.rotation.order = "YXZ";
+    shipGroup.rotation.y = yaw;
+    shipGroup.rotation.x = pitch;
 
-	const direction = new THREE.Vector3();
+    const inputDirection = new THREE.Vector3();
 
-	if (keys['z']) direction.z -= 1;
-	if (keys['s']) direction.z += 1;
-	if (keys['q']) direction.x -= 1;
-	if (keys['d']) direction.x += 1;
-	if (keys[' ']) direction.y += 1;
-	if (keys['shift']) direction.y -= 1;
+    if (keys['z']) inputDirection.z -= 1;
+    if (keys['s']) inputDirection.z += 1;
+    if (keys['q']) inputDirection.x -= 1;
+    if (keys['d']) inputDirection.x += 1;
+    if (keys[' ']) inputDirection.y += 1;
+    if (keys['shift']) inputDirection.y -= 1;
 
-	direction.normalize();
-	direction.applyEuler(ship.rotation);
+    inputDirection.normalize();
+    inputDirection.applyEuler(shipGroup.rotation);
 
-	ship.position.add(direction.multiplyScalar(SHIP_SPEED));
+    shipVelocity.add(inputDirection.multiplyScalar(ACCELERATION));
+
+    shipVelocity.multiplyScalar(FRICTION);
+
+    shipGroup.position.add(shipVelocity.clone().multiplyScalar(SHIP_SPEED));
 }
+
 
 // === Déplacement des astéroïdes ===
 function moveAsteroids() {
@@ -152,7 +212,7 @@ function moveAsteroids() {
 
 // === Détection de collisions ===
 function detectCollisions() {
-	const shipBox = new THREE.Box3().setFromObject(ship);
+	const shipBox = new THREE.Box3().setFromObject(shipGroup);
 
 	for (let asteroid of asteroids) {
 		const asteroidBox = new THREE.Box3().setFromObject(asteroid);
@@ -163,11 +223,40 @@ function detectCollisions() {
 	}
 }
 
+function detectAsteroidCollisions() {
+	for (let i = 0; i < asteroids.length; i++) {
+		const asteroidA = asteroids[i];
+		for (let j = i + 1; j < asteroids.length; j++) {
+			const asteroidB = asteroids[j];
+
+			const dx = asteroidA.position.x - asteroidB.position.x;
+			const dy = asteroidA.position.y - asteroidB.position.y;
+			const dz = asteroidA.position.z - asteroidB.position.z;
+
+			const distanceSq = dx * dx + dy * dy + dz * dz;
+			const radiiSum = asteroidA.userData.radius + asteroidB.userData.radius;
+
+			if (distanceSq < radiiSum * radiiSum) {
+				const tempVelocity = asteroidA.userData.velocity.clone();
+				asteroidA.userData.velocity.copy(asteroidB.userData.velocity);
+				asteroidB.userData.velocity.copy(tempVelocity);
+
+				const distance = Math.sqrt(distanceSq) || 0.0001;
+				const overlap = 0.5 * (radiiSum - distance + 0.0001);
+
+				const displacement = new THREE.Vector3(dx / distance * overlap, dy / distance * overlap, dz / distance * overlap);
+				asteroidA.position.add(displacement);
+				asteroidB.position.sub(displacement);
+			}
+		}
+	}
+}
+
 // === Gestion des astéroïdes ===
 function manageAsteroids() {
 	for (let i = asteroids.length - 1; i >= 0; i--) {
 		const asteroid = asteroids[i];
-		const distance = ship.position.distanceTo(asteroid.position);
+		const distance = shipGroup.position.distanceTo(asteroid.position);
 		if (distance > ASTEROID_REMOVE_DISTANCE) {
 			scene.remove(asteroid);
 			asteroids.splice(i, 1);
@@ -178,15 +267,83 @@ function manageAsteroids() {
 	}
 }
 
+// === Gestion des missiles ===
+const missiles = [];
+let isFiring = false;
+let lastMissileTime = 0;
+let missilesFiredInBurst = 0;
+
+function fireMissile() {
+    const missileGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+    const missileMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const missile = new THREE.Mesh(missileGeometry, missileMaterial);
+
+    missile.position.copy(shipGroup.position);
+    missile.quaternion.copy(shipGroup.quaternion);
+
+    const forwardDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(missile.quaternion).normalize();
+
+    const initialMissileVelocity = forwardDirection.multiplyScalar(MISSILE_SPEED);
+
+    missile.userData = {
+        velocity: initialMissileVelocity.add(shipVelocity.clone())
+    };
+
+    scene.add(missile);
+    missiles.push(missile);
+}
+
+function moveMissiles() {
+    for (let i = missiles.length - 1; i >= 0; i--) {
+        const missile = missiles[i];
+        missile.position.add(missile.userData.velocity.clone());
+
+        if (missile.position.distanceTo(shipGroup.position) > MISSILE_REMOVE_DISTANCE) {
+            scene.remove(missile);
+            missiles.splice(i, 1);
+        }
+    }
+}
+
+function handleFiring() {
+    const now = Date.now();
+
+    if (isFiring) {
+        const currentCooldown = (missilesFiredInBurst > 0 && missilesFiredInBurst % MISSILE_NUMBER === 0) ? reloadTime : missileCooldown;
+
+        if (now - lastMissileTime >= currentCooldown) {
+            fireMissile();
+            lastMissileTime = now;
+            missilesFiredInBurst++;
+
+            if (missilesFiredInBurst > MISSILE_NUMBER) {
+                missilesFiredInBurst = 1;
+            }
+        }
+    }
+}
+
+window.addEventListener('mousedown', (e) => {
+    if (isPointerLocked && e.button === 0) {
+        isFiring = true;
+    }
+});
+
+window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) {
+        isFiring = false;
+    }
+});
+
 // === Etoile de fond animée ===
 const starGeometry = new THREE.BufferGeometry();
-const starsArray = []; // Stockage des étoiles individuelles
+const starsArray = [];
 
 function createStar() {
 	const star = new THREE.Vector3(
-		ship.position.x + (Math.random() - 0.5) * STAR_FIELD_SIZE,
-		ship.position.y + (Math.random() - 0.5) * STAR_FIELD_SIZE,
-		ship.position.z + (Math.random() - 0.5) * STAR_FIELD_SIZE
+		shipGroup.position.x + (Math.random() - 0.5) * STAR_FIELD_SIZE,
+		shipGroup.position.y + (Math.random() - 0.5) * STAR_FIELD_SIZE,
+		shipGroup.position.z + (Math.random() - 0.5) * STAR_FIELD_SIZE
 	);
 	starsArray.push(star);
 }
@@ -204,7 +361,13 @@ for (let i = 0; i < starsArray.length; i++) {
 }
 
 starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-const starMaterial = new THREE.PointsMaterial({ color: 0x888888, size: 0.8, sizeAttenuation: true });
+const starMaterial = new THREE.PointsMaterial({ 
+	color: 0x888888, 
+	size: 0.8, 
+	sizeAttenuation: true,
+	transparent: true,
+	opacity: 0.8
+});
 const stars = new THREE.Points(starGeometry, starMaterial);
 scene.add(stars);
 
@@ -216,7 +379,7 @@ function moveStars() {
 	}
 
 	for (let i = starsArray.length - 1; i >= 0; i--) {
-		if (starsArray[i].distanceTo(ship.position) > STAR_REMOVE_DISTANCE) {
+		if (starsArray[i].distanceTo(shipGroup.position) > STAR_REMOVE_DISTANCE) {
 			starsArray.splice(i, 1);
 		}
 	}
@@ -237,7 +400,7 @@ function moveStars() {
 }
 
 // === Lumières ===
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
 directionalLight.position.set(5, 10, 7.5);
 directionalLight.castShadow = true;
 directionalLight.shadow.mapSize.width = 2048;
@@ -247,22 +410,42 @@ scene.add(directionalLight);
 const ambientLight = new THREE.AmbientLight(0x404040); 
 scene.add(ambientLight);
 
+// === Soleil fixe dans le ciel ===
+const sunGeometry = new THREE.CircleGeometry(144, 64);
+const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, fog: false });
+const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+scene.add(sun);
+
+function updateSunPosition() {
+	const sunDirection = new THREE.Vector3(5, 10, 7.5).normalize();
+	const sunDistance = 2000;
+	const sunPosition = shipGroup.position.clone().add(sunDirection.multiplyScalar(sunDistance));
+	sun.position.copy(sunPosition);
+	sun.lookAt(camera.position);
+}
+
 // === Mise à jour de la caméra ===
 function updateCamera() {
-	const offset = new THREE.Vector3(0, 0, CAMERA_OFFSET_Z);
-	offset.applyEuler(ship.rotation);
-	camera.position.copy(ship.position.clone().add(offset));
-	camera.lookAt(ship.position.clone().add(new THREE.Vector3(0, 0, CAMERA_LOOK_AT_OFFSET)));
+    const offset = new THREE.Vector3(0, 0, CAMERA_OFFSET_Z);
+    offset.applyEuler(shipGroup.rotation);
+    camera.position.copy(shipGroup.position.clone().add(offset));
+    camera.lookAt(shipGroup.position.clone().add(new THREE.Vector3(0, 0, CAMERA_LOOK_AT_OFFSET)));
 }
 
 // === Boucle d'animation ===
 function animate() {
 	moveStars();
 	requestAnimationFrame(animate);
-	moveShip();
-	moveAsteroids();
-	// detectCollisions(); // désactivé pour l'instant pour des raisons de debug (ignorer)
 	manageAsteroids();
+	updateSunPosition();
+	if (isPointerLocked) { // pour forcer l'utilisateur a cliquer une fois sur l'écran pour démarrer
+		moveShip();
+		moveAsteroids();
+		moveMissiles();
+		handleFiring();
+		// detectCollisions();
+		detectAsteroidCollisions();
+	}
 	updateCamera();
 	renderer.render(scene, camera);
 }
