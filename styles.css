@@ -5,103 +5,103 @@ body {
 }
 
 #overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    color: #00ff00;
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.8);
+	color: #00ff00;
 	opacity: 0.5;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 3rem;
-    font-weight: bold;
-    z-index: 9999;
-    pointer-events: none;
-    user-select: none;
-    transition: opacity 0.5s;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	font-size: 3rem;
+	font-weight: bold;
+	z-index: 9999;
+	pointer-events: none;
+	user-select: none;
+	transition: opacity 0.5s;
 }
 
 #overlay.hidden {
-    opacity: 0;
-    pointer-events: none;
+	opacity: 0;
+	pointer-events: none;
 }
 
 #loader {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 10000;
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 10000;
 }
 
 .spinner {
-    width: 60px;
-    height: 60px;
-    border: 8px solid #00ff00;
-    border-top: 8px solid transparent;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
+	width: 60px;
+	height: 60px;
+	border: 8px solid #00ff00;
+	border-top: 8px solid transparent;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
 }
 
 #gameOverScreen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: black;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    flex-direction: column;
-    color: #00ff00;
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-color: black;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	z-index: 9999;
+	flex-direction: column;
+	color: #00ff00;
 }
 
 #gameOverScreen.hidden {
-    display: none;
+	display: none;
 }
 
 .game-over-container {
-    text-align: center;
-    background: rgba(0, 255, 0, 0.1);
-    border: 2px solid #00ff00;
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: 0 0 30px #00ff00;
+	text-align: center;
+	background: rgba(0, 255, 0, 0.1);
+	border: 2px solid #00ff00;
+	padding: 40px;
+	border-radius: 20px;
+	box-shadow: 0 0 30px #00ff00;
 }
 
 #gameOverScreen h1 {
-    font-size: 48px;
-    margin-bottom: 30px;
+	font-size: 48px;
+	margin-bottom: 30px;
 }
 
 #restartButton {
-    font-size: 24px;
-    padding: 12px 30px;
-    background-color: black;
-    border: 2px solid #00ff00;
-    color: #00ff00;
-    cursor: pointer;
-    transition: background 0.3s;
+	font-size: 24px;
+	padding: 12px 30px;
+	background-color: black;
+	border: 2px solid #00ff00;
+	color: #00ff00;
+	cursor: pointer;
+	transition: background 0.3s;
 }
 
 #restartButton:hover {
-    background-color: #00ff00;
-    color: black;
+	background-color: #00ff00;
+	color: black;
 }
 
 #lives {
