@@ -611,7 +611,7 @@ function animate() {
 	requestAnimationFrame(animate);
 	manageAsteroids();
 	updateSunPosition();
-	if (isPointerLocked && !isGameOver) { // pour forcer l'utilisateur a cliquer une fois sur l'écran pour démarrer
+	if (isPointerLocked && !isGameOver) {
 		moveShip();
 		moveAsteroids();
 		moveMissiles();
