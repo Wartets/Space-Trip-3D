@@ -596,19 +596,19 @@ function updateCamera() {
 let isGameOver = false;
 
 function gameOver() {
-    isGameOver = true;
-    const gameOverScreen = document.getElementById('gameOverScreen');
-    gameOverScreen.classList.remove('hidden');
+	isGameOver = true;
+	const gameOverScreen = document.getElementById('gameOverScreen');
+	gameOverScreen.classList.remove('hidden');
 
-    // Sortir du mode pointer lock
-    if (document.pointerLockElement) {
-        document.exitPointerLock();
-    }
+	// Sortir du mode pointer lock
+	if (document.pointerLockElement) {
+		document.exitPointerLock();
+	}
 }
 
 const restartButton = document.getElementById('restartButton');
 restartButton.addEventListener('click', () => {
-    window.location.reload();
+	window.location.reload();
 });
 
 // === Boucle d'animation ===
