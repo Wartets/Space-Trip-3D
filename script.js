@@ -1,5 +1,5 @@
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x000000, 0.001);
+scene.fog = new THREE.FogExp2(0x100000, 0.0015);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
 
@@ -9,65 +9,108 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// === Constantes de configuration ===
-const ASTEROID_SPAWN_DISTANCE = 1000;			// Demi-largeur de la zone d'apparition
-const ASTEROID_REMOVE_DISTANCE = 1100;			// Distance au-delà de laquelle l'astéroïde est supprimé
+// === Constantes de configuration === (les constantes inutilisées sont commentées)
+const ASTEROID_SPAWN_DISTANCE = 800;			// Demi-largeur de la zone d'apparition
+const ASTEROID_REMOVE_DISTANCE = 900;			// Distance au-delà de laquelle l'astéroïde est supprimé
 const ASTEROID_RESPAWN_DISTANCE = 300;			// Distance de la zone de réapparition
 // const ASTEROID_FOG_DISTANCE = 400;			// Distance au-delà de laquelle les astéroïdes sont assombris
-const ASTEROID_COLLISION_DISTANCE = 500;		// Distance minimale pour le calcul de collisions d'astéroïdes
+// const ASTEROID_COLLISION_DISTANCE = 350;		// Distance minimale pour le calcul de collisions d'astéroïdes
 const ASTEROID_MIN_SIZE = 10;					// Taille minimale des astéroïdes
 const ASTEROID_MAX_SIZE = 60;					// Taille maximale des astéroïdes
-const ASTEROID_COUNT = 1200;					// Nombre d'astéroïdes en même temps
+const ASTEROID_COUNT = 1100;					// Nombre d'astéroïdes en même temps
 const ASTEROID_VELOCITY_MIN = 0.1;				// Vitesse minimale des astéroïdes
 const ASTEROID_VELOCITY_MAX = 5;				// Vitesse maximale des astéroïdes
 const ASTEROID_COLOR_VARIATION = 0x404040;		// Plage de couleurs des astéroïdes
 const SHIP_SPEED = 5;							// Vitesse du vaisseau
+const SHIP_HITBOX_SCALE = 0.7; 					// 1 = plein volume, 0.1 = boîte plus petite
 const SHIP_ROTATION_SENSITIVITY = 0.002;		// Sensibilité de la rotation du vaisseau
 const CAMERA_OFFSET_Z = 5;						// Distance de la caméra par rapport au vaisseau
 const CAMERA_LOOK_AT_OFFSET = 0.8;				// Distance de décalage pour l'orientation de la caméra
+const SHIP_TILT_MAX = 0.26;						// inclinaison maximale (en radians)
+const SHIP_TILT_SPEED = 0.15;					// vitesse de transition vers l’inclinaison cible
+const ACCELERATION = 0.4;						// Force d'accélération
+const FRICTION = 0.9;							// Taux de "freinage" par frame (0.95 = ralentit doucement)
 const starCount = 4000;							// Nombre d'étoiles
 const STAR_FIELD_SIZE = 2000;					// Taille du cube dans lequel les étoiles sont générées
 const STAR_REMOVE_DISTANCE = 1000;				// Distance au-delà de laquelle une étoile est supprimée
 const MISSILE_REMOVE_DISTANCE = 800;			// Distance au-delà de laquelle le missile est supprimé
-const MISSILE_SPEED = 10;						// Vitesse du missile
+const MISSILE_SPEED = 13;						// Vitesse du missile
 const MISSILE_RADIUS = 0.5;						// Rayon des missiles
-let missileCooldown = 490; 						// Temps entre les tirs en ms
+let missileCooldown = 250; 						// Temps entre les tirs en ms
 let MISSILE_NUMBER = 20;						// Nombre de missile avant rechargement
-let reloadTime = 4000; 							// Temps de rechargement après MISSILE_NUMBER tirs en ms
+let reloadTime = missileCooldown * 5; 			// Temps de rechargement après MISSILE_NUMBER tirs en ms
 let lives = 5;									// Nombre de vies
 const invulnerabilityDuration = 2000;			// Temps d'invincibilité après un choc en ms
 
+// === Gestion des points & Temps de jeu ===
+let score = 0;
+let movementTimer = 0;
+let gameTime = 0; // en secondes
+let lastTimeUpdate = performance.now();
+
+const scoreElement = document.createElement('div');
+scoreElement.style.position = 'absolute';
+scoreElement.style.top = '10px';
+scoreElement.style.left = '10px';
+scoreElement.style.color = 'green';
+scoreElement.style.fontSize = '20px';
+scoreElement.style.userSelect = 'none';
+scoreElement.innerText = `Score: ${score}`;
+document.body.appendChild(scoreElement);
+
+const timeElement = document.createElement('div');
+timeElement.style.position = 'absolute';
+timeElement.style.top = '35px';
+timeElement.style.left = '10px';
+timeElement.style.color = 'green';
+timeElement.style.fontSize = '20px';
+timeElement.style.userSelect = 'none';
+timeElement.innerText = `0s`;
+document.body.appendChild(timeElement);
+
+function updateScore(points) {
+    score += points;
+    scoreElement.innerText = `Score: ${score}`;
+}
+
 // === Création du vaisseau ===
 const shipVelocity = new THREE.Vector3();
-const ACCELERATION = 0.4;						// Force d'accélération
-const FRICTION = 0.9;							// Taux de "freinage" par frame (0.95 = ralentit doucement)
 
 const shipGroup = new THREE.Group();
+
 const shipParts = [
-	new THREE.BoxGeometry(0.2, 0.5, 0.2),		// Vertical body part
-	new THREE.BoxGeometry(0.3, 0.2, 0.6),		// Horizontal body part
-	new THREE.BoxGeometry(0.2, 0.2, 0.2),		// Smaller part for the front
-	new THREE.BoxGeometry(0.1, 0.1, 0.4),		// Small tail part
-	new THREE.BoxGeometry(0.4, 0.2, 0.1),		// Wing-like extension
+	new THREE.BoxGeometry(0.2, 0.6, 0.2),   // Corps vertical (fuselage)
+	new THREE.BoxGeometry(0.2, 0.2, 1),     // Corps horizontal (nez allongé)
+	new THREE.BoxGeometry(1.2, 0.05, 0.4),  // Ailes principales
+	new THREE.BoxGeometry(0.4, 0.05, 0.2),  // Ailes arrière
+	new THREE.BoxGeometry(0.05, 0.3, 0.1),  // Stabilisateur vertical (queue)
 ];
 
-const shipMaterialPart = new THREE.MeshStandardMaterial({ color: 0xe81730, roughness: 0.5, metalness: 0.1 });
-const parts = shipParts.map((geometry, index) => {
-	const part = new THREE.Mesh(geometry, shipMaterialPart);
-	part.castShadow = true;
-	part.receiveShadow = true;
-	return part;
+const shipMaterialPart = new THREE.MeshStandardMaterial({
+	color: 0xe81730,
+	roughness: 0.5,
+	metalness: 0.3,
 });
 
-parts[0].position.set(0, 0, 0);					// Center of the body
-parts[1].position.set(-0.2, 0.3, 0);			// Horizontal body part
-parts[2].position.set(0, 0.7, 0);				// Front small part
-parts[3].position.set(0, -0.3, 0);				// Small tail part
-parts[4].position.set(0.5, 0.5, 0);				// Wing-like extension
+const parts = shipParts.map(geometry => {
+	const mesh = new THREE.Mesh(geometry, shipMaterialPart);
+	mesh.castShadow = true;
+	mesh.receiveShadow = true;
+	return mesh;
+});
+
+parts[0].position.set(0, 0, 0);              // Fuselage central
+parts[1].position.set(0, 0.2, 0.6);          // Nez allongé à l'avant
+parts[2].position.set(0, 0, 0);              // Ailes principales (symétriques)
+parts[3].position.set(0, 0, -0.4);           // Ailes arrière plus petites
+parts[4].position.set(0, 0.25, -0.5);        // Queue verticale (stabilisateur)
 
 parts.forEach(part => shipGroup.add(part));
 
 scene.add(shipGroup);
+
+let lastShipPosition = new THREE.Vector3();
+lastShipPosition.copy(shipGroup.position);
 
 // === Lumière du vaisseau ===
 const shipLight = new THREE.PointLight(0xf38b97, 100, 1000);
@@ -110,7 +153,7 @@ function createAsteroid() {
 	else geo = new THREE.SphereGeometry(size, 6, 6);
 
 	const mat = new THREE.MeshStandardMaterial({
-		color: Math.random() * ASTEROID_COLOR_VARIATION,
+		color: (Math.random() * 1.5 - 1) * ASTEROID_COLOR_VARIATION,
 		wireframe: Math.random() < 0.05,
 		transparent: Math.random() > 0.5,
 		opacity: Math.random() > 0.5,
@@ -164,6 +207,13 @@ window.addEventListener('keyup', (e) => {
 // === Mouvement du vaisseau ===
 let pitch = 0;
 let yaw = 0;
+let mouseYaw = 0;
+let mousePitch = 0;
+let targetRoll = 0;
+let targetPitch = 0;
+let visualPitch = 0;
+let visualRoll = 0;
+
 let isPointerLocked = false;
 document.body.addEventListener('click', () => {
 	document.body.requestPointerLock();
@@ -181,19 +231,32 @@ document.addEventListener('pointerlockchange', () => {
 
 document.addEventListener('mousemove', (e) => {
 	if (isPointerLocked) {
-		yaw -= e.movementX * SHIP_ROTATION_SENSITIVITY;
-		pitch -= e.movementY * SHIP_ROTATION_SENSITIVITY;
-		pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+		const movementX = e.movementX;
+		const movementY = e.movementY;
+
+		yaw -= movementX * SHIP_ROTATION_SENSITIVITY;
+		pitch -= movementY * SHIP_ROTATION_SENSITIVITY;
+		mouseYaw -= movementX * SHIP_ROTATION_SENSITIVITY;
+		mousePitch -= movementY * SHIP_ROTATION_SENSITIVITY;
+
+		visualPitch = movementY * SHIP_ROTATION_SENSITIVITY;
+		visualRoll = -movementX * SHIP_ROTATION_SENSITIVITY;
+
+		visualPitch = THREE.MathUtils.clamp(visualPitch, -SHIP_TILT_MAX, SHIP_TILT_MAX);
+		visualRoll = THREE.MathUtils.clamp(visualRoll, -SHIP_TILT_MAX, SHIP_TILT_MAX);
+
+		// pitch = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, pitch));
 	}
 });
 
 function moveShip() {
 	shipGroup.rotation.order = "YXZ";
-	shipGroup.rotation.y = yaw;
-	shipGroup.rotation.x = pitch;
 
+	shipGroup.rotation.y += (yaw - shipGroup.rotation.y) * 0.1;
+	shipGroup.rotation.x += (pitch - shipGroup.rotation.x) * 0.1;
+
+	// Mouvements clavier
 	const inputDirection = new THREE.Vector3();
-
 	if (keys['z']) inputDirection.z -= 1;
 	if (keys['s']) inputDirection.z += 1;
 	if (keys['q']) inputDirection.x -= 1;
@@ -205,10 +268,25 @@ function moveShip() {
 	inputDirection.applyEuler(shipGroup.rotation);
 
 	shipVelocity.add(inputDirection.multiplyScalar(ACCELERATION));
-
 	shipVelocity.multiplyScalar(FRICTION);
-
 	shipGroup.position.add(shipVelocity.clone().multiplyScalar(SHIP_SPEED));
+
+	if (keys['q']) targetRoll = SHIP_TILT_MAX;
+	else if (keys['d']) targetRoll = -SHIP_TILT_MAX;
+	else targetRoll = 0;
+
+	if (keys['z']) targetPitch = SHIP_TILT_MAX * 0.25;
+	else if (keys['s']) targetPitch = -SHIP_TILT_MAX * 0.25;
+	else targetPitch = 0;
+
+	const finalRoll = targetRoll + visualRoll;
+	const finalPitch = targetPitch + visualPitch;
+
+	shipGroup.rotation.z += (finalRoll - shipGroup.rotation.z) * SHIP_TILT_SPEED;
+	shipGroup.rotation.x += (finalPitch - shipGroup.rotation.x) * SHIP_TILT_SPEED;
+
+	visualRoll *= FRICTION;
+	visualPitch *= FRICTION;
 }
 
 // === Déplacement des astéroïdes ===
@@ -298,23 +376,37 @@ function pulse() {
 function detectCollisions() {
 	if (isInvulnerable) return;
 
-	const shipBox = new THREE.Box3().setFromObject(shipGroup);
+	const shipParts = shipGroup.children;
+
+	const shipHitboxes = shipParts.map(part => {
+		const box = new THREE.Box3().setFromObject(part);
+		box.expandByScalar(-(1 - SHIP_HITBOX_SCALE));
+		return box;
+	});
 
 	for (let asteroid of asteroids) {
 		const asteroidBox = new THREE.Box3().setFromObject(asteroid);
-		if (shipBox.intersectsBox(asteroidBox)) {
-			loseLife();
-			break;
+
+		for (let shipBox of shipHitboxes) {
+			if (shipBox.intersectsBox(asteroidBox)) {
+				loseLife();
+				return;
+			}
 		}
 	}
 	
-	for (let missile of enemyMissiles) {
-		const missileBox = new THREE.Box3().setFromObject(missile);
-		if (shipBox.intersectsBox(missileBox)) {
-			loseLife();
-			scene.remove(missile);
-			enemyMissiles.splice(enemyMissiles.indexOf(missile), 1);
-			break;
+	const enemyMissiles = [];
+	
+	if (Array.isArray(enemyMissiles) && enemyMissiles.length > 0) {
+		for (let i = 0; i < enemyMissiles.length; i++) {
+			const missile = enemyMissiles[i];
+			const missileBox = new THREE.Box3().setFromObject(missile);
+			if (shipBox.intersectsBox(missileBox)) {
+				loseLife();
+				scene.remove(missile);
+				enemyMissiles.splice(i, 1);
+				break;
+			}
 		}
 	}
 }
@@ -382,11 +474,9 @@ function fireMissile() {
 	missile.position.copy(startPosition);
 	missile.quaternion.copy(shipGroup.quaternion);
 
-	const missileSpeed = 10;
-
 	const shipVelocityAtFireTime = shipVelocity.clone();
 
-	const initialMissileVelocity = forwardDirection.multiplyScalar(missileSpeed).add(shipVelocityAtFireTime);
+	const initialMissileVelocity = forwardDirection.multiplyScalar(MISSILE_SPEED).add(shipVelocityAtFireTime);
 
 	missile.userData = {
 		velocity: initialMissileVelocity
@@ -395,7 +485,6 @@ function fireMissile() {
 	scene.add(missile);
 	missiles.push(missile);
 }
-
 
 function moveMissiles() {
 	for (let i = missiles.length - 1; i >= 0; i--) {
@@ -420,8 +509,18 @@ function handleFiring() {
 			lastMissileTime = now;
 			missilesFiredInBurst++;
 
-			if (missilesFiredInBurst > MISSILE_NUMBER) {
-				missilesFiredInBurst = 1;
+			if (now - lastMissileTime >= currentCooldown) {
+				if (missilesFiredInBurst > 0 && missilesFiredInBurst % MISSILE_NUMBER === 0) {
+					updateScore(-50);
+				}
+
+				fireMissile();
+				lastMissileTime = now;
+				missilesFiredInBurst++;
+
+				if (missilesFiredInBurst > MISSILE_NUMBER) {
+					missilesFiredInBurst = 1;
+				}
 			}
 		}
 	}
@@ -455,6 +554,9 @@ function detectMissileAsteroidCollisions() {
 
 				scene.remove(asteroid);
 				asteroids.splice(j, 1);
+				
+				let pointsEarned = Math.floor(100 / asteroid.userData.radius);
+				updateScore(pointsEarned);
 
 				if (asteroid.userData.radius > ASTEROID_MIN_SIZE / 16) {
 					const newRadius = asteroid.userData.radius * 0.5;
@@ -509,9 +611,7 @@ function createStar() {
 }
 
 // Création initiale des étoiles
-for (let i = 0; i < starCount; i++) {
-	createStar();
-}
+for (let i = 0; i < starCount; i++) createStar();
 
 const starPositions = new Float32Array(starsArray.length * 3);
 for (let i = 0; i < starsArray.length; i++) {
@@ -592,7 +692,7 @@ function updateCamera() {
 	camera.lookAt(shipGroup.position.clone().add(new THREE.Vector3(0, 0, CAMERA_LOOK_AT_OFFSET)));
 }
 
-// === Game Over ===
+// === Game Over & Restart ===
 let isGameOver = false;
 
 function gameOver() {
@@ -627,14 +727,36 @@ function animate() {
 		moveMissiles();
 		detectMissileAsteroidCollisions();
 		handleFiring();
-		// detectCollisions();
+		detectCollisions();
 		detectAsteroidCollisions();
 		pulse();
+		
+		const now = performance.now();
+		if (isPointerLocked && !isGameOver) {
+			const delta = (now - lastTimeUpdate) / 1000; // en secondes
+			gameTime += delta;
+			timeElement.innerText = `${Math.floor(gameTime)}s`;
+		}
+		lastTimeUpdate = now;
 	}
 	updateCamera();
+	
+	if (!shipGroup.position.equals(lastShipPosition)) {
+		movementTimer++;
+
+		if (movementTimer >= 30) {
+			updateScore(1);
+			movementTimer = 0;
+		}
+	} else {
+		movementTimer = 0;
+	}
+	lastShipPosition.copy(shipGroup.position);
+	
 	renderer.render(scene, camera);
 }
 
+// === Start ===
 startInvulnerability(5000); // 5 secondes
 animate();
 
